@@ -27,12 +27,7 @@ interface Message {
   editHistory?: Array<{ content: string; editedAt: string }>;
   replyTo?: { _id: string; content: string; sender: { displayName: string } };
   reactions?: Array<{ emoji: string; users: string[]; count: number }>;
-  attachments?: Array<{
-    url: string;
-    name: string;
-    size: number;
-    type: string;
-  }>;
+  attachments?: any[];
   isPinned?: boolean;
   isDeleted?: boolean;
   readBy?: string[];
@@ -42,9 +37,6 @@ interface Room {
   _id: string;
   name: string;
   type: "direct" | "group" | "channel";
-  description?: string;
-  avatar?: string;
-  isPublic?: boolean;
   members: Array<{
     user: {
       _id: string;
@@ -54,10 +46,13 @@ interface Room {
       status: string;
       role?: string;
     };
-    role: "owner" | "admin" | "moderator" | "member";
+    role: string;
     nickname?: string;
   }>;
   settings?: { readOnly?: boolean };
+  description?: string;
+  avatar?: string;
+  isPublic?: boolean;
 }
 
 interface IncomingCall {
@@ -80,26 +75,70 @@ export default function ChatRoom({ room }: { room: Room }) {
     targetUser?: any;
   } | null>(null);
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
+
   const { showMemberList, typingUsers } = useChatStore();
-  const { startTyping, stopTyping, onCallIncoming, acceptCall, declineCall } =
+  const { socket, startTyping, stopTyping, acceptCall, declineCall } =
     useSocket();
-  const messagesRef = useRef<Message[]>([]);
-  messagesRef.current = messages;
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   const otherUser =
     room.type === "direct"
       ? room.members.find((m) => m.user._id !== session?.user?.id)?.user
       : undefined;
 
-  // Écouter les appels entrants
+  // Écouter les événements socket directement
   useEffect(() => {
-    const off = onCallIncoming((data: IncomingCall) => {
-      setIncomingCall(data);
-    });
-    return off;
-  }, [onCallIncoming]);
+    if (!socket) return;
 
+    const handleNewMessage = (message: any) => {
+      const msgRoomId = message.room?._id || message.room;
+      if (msgRoomId !== room._id) return;
+      setMessages((prev) =>
+        prev.some((m) => m._id === message._id) ? prev : [...prev, message],
+      );
+    };
+
+    const handleEditedMessage = (message: any) => {
+      setMessages((prev) =>
+        prev.map((m) => (m._id === message._id ? { ...m, ...message } : m)),
+      );
+    };
+
+    const handleDeletedMessage = ({ messageId }: any) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === messageId ? { ...m, isDeleted: true, content: "" } : m,
+        ),
+      );
+    };
+
+    const handleReaction = ({ messageId, reactions }: any) => {
+      setMessages((prev) =>
+        prev.map((m) => (m._id === messageId ? { ...m, reactions } : m)),
+      );
+    };
+
+    // ← Écouter les appels entrants DIRECTEMENT ici
+    const handleIncomingCall = (data: IncomingCall) => {
+      console.log("📞 ChatRoom received incoming call:", data);
+      setIncomingCall(data);
+    };
+
+    socket.on("message:new", handleNewMessage);
+    socket.on("message:edited", handleEditedMessage);
+    socket.on("message:deleted", handleDeletedMessage);
+    socket.on("message:reaction", handleReaction);
+    socket.on("call:incoming", handleIncomingCall);
+
+    return () => {
+      socket.off("message:new", handleNewMessage);
+      socket.off("message:edited", handleEditedMessage);
+      socket.off("message:deleted", handleDeletedMessage);
+      socket.off("message:reaction", handleReaction);
+      socket.off("call:incoming", handleIncomingCall);
+    };
+  }, [socket, room._id]);
+
+  // Charger les messages initiaux
   const fetchMessages = useCallback(
     async (before?: string) => {
       setIsLoading(true);
@@ -122,24 +161,7 @@ export default function ChatRoom({ room }: { room: Room }) {
   useEffect(() => {
     setMessages([]);
     fetchMessages();
-
-    pollRef.current = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/messages?roomId=${room._id}&limit=50`);
-        const data = await res.json();
-        if (data.success) {
-          const msgs = data.data?.messages || data.data || [];
-          const existingIds = new Set(messagesRef.current.map((m) => m._id));
-          const newMsgs = msgs.filter((m: Message) => !existingIds.has(m._id));
-          if (newMsgs.length > 0) setMessages((prev) => [...prev, ...newMsgs]);
-        }
-      } catch {}
-    }, 2000);
-
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [room._id, fetchMessages]);
+  }, [room._id]);
 
   const handleSend = async (
     content: string,
@@ -258,7 +280,6 @@ export default function ChatRoom({ room }: { room: Room }) {
         )}
       </div>
 
-      {/* Modal appel actif */}
       {activeCall && (
         <CallModal
           roomId={room._id}
@@ -268,7 +289,6 @@ export default function ChatRoom({ room }: { room: Room }) {
         />
       )}
 
-      {/* Modal appel entrant */}
       {incomingCall && !activeCall && (
         <IncomingCallModal
           callId={incomingCall.callId}

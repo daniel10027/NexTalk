@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { useChatStore } from "@/store/chatStore";
 
 let socket: Socket | null = null;
+let socketUserId: string | null = null;
 
 export function useSocket() {
   const { data: session } = useSession();
@@ -21,8 +22,14 @@ export function useSocket() {
   } = useChatStore();
 
   useEffect(() => {
-    if (!session?.user?.id || initialized.current) return;
+    if (!session?.user?.id) return;
+    // Si déjà connecté avec le même user, ne pas reconnecter
+    if (socket?.connected && socketUserId === session.user.id) return;
+    if (initialized.current) return;
     initialized.current = true;
+    socketUserId = session.user.id;
+
+    console.log("🔄 Connecting socket for user:", session.user.id);
 
     socket = io(window.location.origin, {
       auth: { userId: session.user.id },
@@ -33,27 +40,37 @@ export function useSocket() {
     });
 
     socket.on("connect", () => {
-      console.log("✅ Socket connected:", socket?.id);
+      console.log(
+        "✅ Socket connected! ID:",
+        socket?.id,
+        "User:",
+        session.user.id,
+      );
     });
 
     socket.on("connect_error", (err) => {
-      console.error("❌ Socket error:", err.message);
+      console.error("❌ Socket connect_error:", err.message, err);
     });
 
-    socket.on("disconnect", () => {
-      console.log("❌ Socket disconnected");
+    socket.on("disconnect", (reason) => {
+      console.log("❌ Socket disconnected. Reason:", reason);
     });
 
     socket.on("message:new", (message: any) => {
-      addMessage(message.room, message);
+      console.log("📨 New message via socket:", message._id);
+      addMessage(message.room?._id || message.room, message);
     });
 
     socket.on("message:edited", (message: any) => {
-      updateMessage(message.room, message._id, message);
+      updateMessage(message.room?._id || message.room, message._id, message);
     });
 
     socket.on("message:deleted", ({ messageId, roomId }: any) => {
       storeDeleteMessage(roomId, messageId);
+    });
+
+    socket.on("message:reaction", ({ messageId, reactions }: any) => {
+      console.log("👍 Reaction update:", messageId);
     });
 
     socket.on("typing:start", ({ userId, roomId }: any) => {
@@ -68,12 +85,44 @@ export function useSocket() {
       setUserStatus(userId, status);
     });
 
+    // Logs appels
+    socket.on("call:incoming", (data: any) => {
+      console.log("📞 Incoming call:", data);
+    });
+
+    socket.on("call:initiated", (data: any) => {
+      console.log("📞 Call initiated:", data);
+    });
+
+    socket.on("call:accepted", (data: any) => {
+      console.log("📞 Call accepted:", data);
+    });
+
+    socket.on("call:declined", (data: any) => {
+      console.log("📞 Call declined:", data);
+    });
+
+    socket.on("webrtc:offer", (data: any) => {
+      console.log("🔗 WebRTC offer received");
+    });
+
+    socket.on("webrtc:answer", (data: any) => {
+      console.log("🔗 WebRTC answer received");
+    });
+
+    socket.on("webrtc:ice-candidate", (data: any) => {
+      console.log("🧊 ICE candidate received");
+    });
+
     return () => {
       initialized.current = false;
+      socketUserId = null;
       socket?.disconnect();
       socket = null;
     };
   }, [session?.user?.id]);
+
+  // ─── Méthodes ────────────────────────────────────────────────
 
   const sendMessage = useCallback(
     (
@@ -125,14 +174,18 @@ export function useSocket() {
     socket?.emit("message:read", { roomId });
   }, []);
 
+  // ─── Appels ──────────────────────────────────────────────────
+
   const initiateCall = useCallback(
     (roomId: string, callType: "audio" | "video", targetUserId?: string) => {
+      console.log("📞 Emitting call:initiate to", targetUserId);
       socket?.emit("call:initiate", { roomId, callType, targetUserId });
     },
     [],
   );
 
   const acceptCall = useCallback((callId: string, roomId: string) => {
+    console.log("📞 Emitting call:accept", callId);
     socket?.emit("call:accept", { callId, roomId });
   }, []);
 
@@ -150,6 +203,7 @@ export function useSocket() {
       offer: RTCSessionDescriptionInit,
       callId: string,
     ) => {
+      console.log("🔗 Sending WebRTC offer to", targetUserId);
       socket?.emit("webrtc:offer", { targetUserId, offer, callId });
     },
     [],
@@ -161,6 +215,7 @@ export function useSocket() {
       answer: RTCSessionDescriptionInit,
       callId: string,
     ) => {
+      console.log("🔗 Sending WebRTC answer to", targetUserId);
       socket?.emit("webrtc:answer", { targetUserId, answer, callId });
     },
     [],
@@ -172,6 +227,8 @@ export function useSocket() {
     },
     [],
   );
+
+  // ─── Listeners (retournent une fonction de cleanup) ──────────
 
   const onCallIncoming = useCallback((cb: (data: any) => void) => {
     socket?.on("call:incoming", cb);
