@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/options";
@@ -7,17 +6,29 @@ const f = createUploadthing();
 
 export const ourFileRouter = {
   // Avatar upload
-  avatarUploader: f({ image: { maxFileSize: "4MB", maxFileCount: 1 } })
+  avatarUploader: f({
+    image: {
+      maxFileSize: "4MB",
+      maxFileCount: 1,
+      contentDisposition: "attachment",
+    },
+  })
     .middleware(async () => {
       const session = await getServerSession(authOptions);
       if (!session?.user?.id) throw new Error("Unauthorized");
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      return { uploadedBy: metadata.userId, url: file.url, key: file.key };
+      return {
+        uploadedBy: metadata.userId,
+        url: file.url,
+        key: file.key,
+        name: file.name,
+        size: file.size,
+      };
     }),
 
-  // Message attachments
+  // Message attachments (tous les types de fichiers)
   messageAttachment: f({
     image: { maxFileSize: "16MB", maxFileCount: 5 },
     video: { maxFileSize: "256MB", maxFileCount: 1 },
@@ -33,18 +44,37 @@ export const ourFileRouter = {
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      return { uploadedBy: metadata.userId, url: file.url, key: file.key, name: file.name, size: file.size };
+      return {
+        uploadedBy: metadata.userId,
+        url: file.url,
+        key: file.key,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      };
     }),
 
   // Room banner
-  roomBanner: f({ image: { maxFileSize: "8MB", maxFileCount: 1 } })
+  roomBanner: f({
+    image: {
+      maxFileSize: "8MB",
+      maxFileCount: 1,
+      contentDisposition: "attachment",
+    },
+  })
     .middleware(async () => {
       const session = await getServerSession(authOptions);
       if (!session?.user?.id) throw new Error("Unauthorized");
       return { userId: session.user.id };
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      return { uploadedBy: metadata.userId, url: file.url, key: file.key };
+      return {
+        uploadedBy: metadata.userId,
+        url: file.url,
+        key: file.key,
+        name: file.name,
+        size: file.size,
+      };
     }),
 } satisfies FileRouter;
 

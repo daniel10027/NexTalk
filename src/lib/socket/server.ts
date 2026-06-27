@@ -1,14 +1,12 @@
 // @ts-nocheck
 import { Server as SocketIOServer } from "socket.io";
 import connectDB from "@/lib/db/mongoose";
-import { User, Room, Message, Notification, Call } from "@/models";
+import { User, Room, Message, Call } from "@/models";
 
 export function initSocketServer(io: SocketIOServer) {
-  // Pas d'auth strict — on identifie via userId envoyé à la connexion
   io.on("connection", async (socket) => {
     const userId = socket.handshake.auth.userId;
     if (!userId) {
-      console.log("Socket sans userId, connexion refusée");
       socket.disconnect();
       return;
     }
@@ -23,7 +21,6 @@ export function initSocketServer(io: SocketIOServer) {
       });
       socket.broadcast.emit("user:status", { userId, status: "online" });
 
-      // Rejoindre les rooms de l'utilisateur
       const rooms = await Room.find({ "members.user": userId }).select("_id");
       rooms.forEach((room) => socket.join(room._id.toString()));
       socket.join(`user:${userId}`);
@@ -98,21 +95,19 @@ export function initSocketServer(io: SocketIOServer) {
         await connectDB();
         const msg = await Message.findById(messageId);
         if (!msg) return;
-        const reactionIdx = msg.reactions.findIndex(
-          (r: any) => r.emoji === emoji,
-        );
-        if (reactionIdx === -1) {
+        const idx = msg.reactions.findIndex((r: any) => r.emoji === emoji);
+        if (idx === -1) {
           msg.reactions.push({ emoji, users: [userId], count: 1 });
         } else {
-          const reaction = msg.reactions[reactionIdx];
-          const userIdx = reaction.users.indexOf(userId);
-          if (userIdx === -1) {
-            reaction.users.push(userId);
-            reaction.count++;
+          const r = msg.reactions[idx];
+          const ui = r.users.indexOf(userId);
+          if (ui === -1) {
+            r.users.push(userId);
+            r.count++;
           } else {
-            reaction.users.splice(userIdx, 1);
-            reaction.count--;
-            if (reaction.count === 0) msg.reactions.splice(reactionIdx, 1);
+            r.users.splice(ui, 1);
+            r.count--;
+            if (r.count === 0) msg.reactions.splice(idx, 1);
           }
         }
         await msg.save();
@@ -123,9 +118,35 @@ export function initSocketServer(io: SocketIOServer) {
       } catch {}
     });
 
+    socket.on("message:pin", async ({ roomId, messageId }) => {
+      try {
+        await connectDB();
+        const msg = await Message.findById(messageId);
+        if (!msg) return;
+        msg.isPinned = !msg.isPinned;
+        await msg.save();
+        io.to(roomId).emit("message:pinned", {
+          messageId,
+          isPinned: msg.isPinned,
+        });
+      } catch {}
+    });
+
     // ─── Typing ──────────────────────────────────────────────
-    socket.on("typing:start", ({ roomId }) => {
-      socket.to(roomId).emit("typing:start", { userId, roomId });
+    socket.on("typing:start", async ({ roomId }) => {
+      try {
+        await connectDB();
+        const user = await User.findById(userId).select("displayName username");
+        socket.to(roomId).emit("typing:start", {
+          userId,
+          roomId,
+          displayName: user?.displayName || "Someone",
+        });
+      } catch {
+        socket
+          .to(roomId)
+          .emit("typing:start", { userId, roomId, displayName: "Someone" });
+      }
     });
 
     socket.on("typing:stop", ({ roomId }) => {
@@ -145,17 +166,15 @@ export function initSocketServer(io: SocketIOServer) {
     socket.on("message:read", async ({ roomId }) => {
       try {
         await connectDB();
-        await Room.findByIdAndUpdate(
+        await Room.updateOne(
           { _id: roomId, "members.user": userId },
-          { "members.$.lastRead": new Date() },
+          { $set: { "members.$.lastRead": new Date() } },
         );
         socket.to(roomId).emit("message:read", { userId, roomId });
       } catch {}
     });
 
     // ─── WebRTC Signaling ────────────────────────────────────
-
-    // Initier un appel
     socket.on("call:initiate", async ({ roomId, callType, targetUserId }) => {
       try {
         await connectDB();
@@ -163,7 +182,6 @@ export function initSocketServer(io: SocketIOServer) {
           "displayName username avatar",
         );
 
-        // Créer le call dans la DB
         const call = await Call.create({
           room: roomId,
           type: callType,
@@ -173,7 +191,6 @@ export function initSocketServer(io: SocketIOServer) {
           startedAt: new Date(),
         });
 
-        // Notifier le destinataire
         const targetRoom = targetUserId ? `user:${targetUserId}` : roomId;
         io.to(targetRoom).emit("call:incoming", {
           callId: call._id,
@@ -186,14 +203,12 @@ export function initSocketServer(io: SocketIOServer) {
           },
         });
 
-        // Confirmer à l'appelant
         socket.emit("call:initiated", { callId: call._id });
       } catch (err) {
         console.error("call:initiate error:", err);
       }
     });
 
-    // Accepter un appel
     socket.on("call:accept", async ({ callId, roomId }) => {
       try {
         await connectDB();
@@ -201,12 +216,10 @@ export function initSocketServer(io: SocketIOServer) {
           status: "active",
           $push: { participants: { user: userId, joinedAt: new Date() } },
         });
-        // Notifier tous dans la room que l'appel est accepté
         io.to(roomId).emit("call:accepted", { callId, userId });
       } catch {}
     });
 
-    // Refuser un appel
     socket.on("call:decline", async ({ callId, roomId }) => {
       try {
         await connectDB();
@@ -218,7 +231,6 @@ export function initSocketServer(io: SocketIOServer) {
       } catch {}
     });
 
-    // Terminer un appel
     socket.on("call:end", async ({ callId, roomId }) => {
       try {
         await connectDB();
@@ -237,7 +249,6 @@ export function initSocketServer(io: SocketIOServer) {
       } catch {}
     });
 
-    // ─── WebRTC SDP Exchange ─────────────────────────────────
     socket.on("webrtc:offer", ({ targetUserId, offer, callId }) => {
       io.to(`user:${targetUserId}`).emit("webrtc:offer", {
         offer,

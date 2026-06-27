@@ -62,8 +62,16 @@ interface IncomingCall {
   caller: { _id: string; displayName: string; avatar?: string };
 }
 
-export default function ChatRoom({ room }: { room: Room }) {
+export default function ChatRoom({
+  room,
+  currentUserId,
+}: {
+  room: Room;
+  currentUserId?: string;
+}) {
   const { data: session } = useSession();
+  const userId = currentUserId || session?.user?.id;
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
@@ -82,7 +90,7 @@ export default function ChatRoom({ room }: { room: Room }) {
 
   const otherUser =
     room.type === "direct"
-      ? room.members.find((m) => m.user._id !== session?.user?.id)?.user
+      ? room.members.find((m) => m.user._id !== userId)?.user
       : undefined;
 
   // Écouter les événements socket directement
@@ -117,7 +125,6 @@ export default function ChatRoom({ room }: { room: Room }) {
       );
     };
 
-    // ← Écouter les appels entrants DIRECTEMENT ici
     const handleIncomingCall = (data: IncomingCall) => {
       console.log("📞 ChatRoom received incoming call:", data);
       setIncomingCall(data);
@@ -222,15 +229,14 @@ export default function ChatRoom({ room }: { room: Room }) {
     } catch {}
   };
 
-  const currentMember = room.members.find(
-    (m) => m.user._id === session?.user?.id,
-  );
+  const currentMember = room.members.find((m) => m.user._id === userId);
   const currentRole = currentMember?.role || "member";
   const isReadOnly = room.settings?.readOnly && currentRole === "member";
   const pinnedMessages = messages.filter((m) => m.isPinned);
-  const roomTypingUsers = (typingUsers[room._id] || []).filter(
-    (u) => u !== session?.user?.id,
-  );
+
+  const roomTypingUsers = (typingUsers[room._id] || [])
+    .filter((u) => u._id !== userId)
+    .map((u) => u.displayName || u.username);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">

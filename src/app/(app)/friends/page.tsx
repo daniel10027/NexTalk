@@ -105,7 +105,9 @@ export default function FriendsPage() {
   const sendFriendRequest = async (userId: string) => {
     try {
       await fetch(`/api/users/${userId}/friend`, { method: "POST" });
-      setSentRequests((prev) => new Set([...prev, userId]));
+      const newSet = new Set(sentRequests);
+      newSet.add(userId);
+      setSentRequests(newSet);
     } catch {}
   };
 
