@@ -1,0 +1,237 @@
+// @ts-nocheck
+"use client";
+
+import { useEffect, useRef, useCallback } from "react";
+import { io, Socket } from "socket.io-client";
+import { useSession } from "next-auth/react";
+import { useChatStore } from "@/store/chatStore";
+
+let socket: Socket | null = null;
+
+export function useSocket() {
+  const { data: session } = useSession();
+  const initialized = useRef(false);
+  const {
+    addMessage,
+    updateMessage,
+    deleteMessage: storeDeleteMessage,
+    setTypingUser,
+    removeTypingUser,
+    setUserStatus,
+  } = useChatStore();
+
+  useEffect(() => {
+    if (!session?.user?.id || initialized.current) return;
+    initialized.current = true;
+
+    socket = io(window.location.origin, {
+      auth: { userId: session.user.id },
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+    });
+
+    socket.on("connect", () => {
+      console.log("✅ Socket connected:", socket?.id);
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("❌ Socket error:", err.message);
+    });
+
+    socket.on("disconnect", () => {
+      console.log("❌ Socket disconnected");
+    });
+
+    socket.on("message:new", (message: any) => {
+      addMessage(message.room, message);
+    });
+
+    socket.on("message:edited", (message: any) => {
+      updateMessage(message.room, message._id, message);
+    });
+
+    socket.on("message:deleted", ({ messageId, roomId }: any) => {
+      storeDeleteMessage(roomId, messageId);
+    });
+
+    socket.on("typing:start", ({ userId, roomId }: any) => {
+      setTypingUser(roomId, userId);
+    });
+
+    socket.on("typing:stop", ({ userId, roomId }: any) => {
+      removeTypingUser(roomId, userId);
+    });
+
+    socket.on("user:status", ({ userId, status }: any) => {
+      setUserStatus(userId, status);
+    });
+
+    return () => {
+      initialized.current = false;
+      socket?.disconnect();
+      socket = null;
+    };
+  }, [session?.user?.id]);
+
+  const sendMessage = useCallback(
+    (
+      roomId: string,
+      content: string,
+      attachments?: string[],
+      replyTo?: string,
+    ) => {
+      socket?.emit("message:send", { roomId, content, attachments, replyTo });
+    },
+    [],
+  );
+
+  const editMessage = useCallback(
+    (roomId: string, messageId: string, content: string) => {
+      socket?.emit("message:edit", { roomId, messageId, content });
+    },
+    [],
+  );
+
+  const reactToMessage = useCallback(
+    (roomId: string, messageId: string, emoji: string) => {
+      socket?.emit("message:react", { roomId, messageId, emoji });
+    },
+    [],
+  );
+
+  const deleteMessage = useCallback((roomId: string, messageId: string) => {
+    socket?.emit("message:delete", { roomId, messageId });
+  }, []);
+
+  const pinMessage = useCallback((roomId: string, messageId: string) => {
+    socket?.emit("message:pin", { roomId, messageId });
+  }, []);
+
+  const startTyping = useCallback((roomId: string) => {
+    socket?.emit("typing:start", { roomId });
+  }, []);
+
+  const stopTyping = useCallback((roomId: string) => {
+    socket?.emit("typing:stop", { roomId });
+  }, []);
+
+  const updateStatus = useCallback((status: string) => {
+    socket?.emit("status:update", { status });
+  }, []);
+
+  const markRead = useCallback((roomId: string) => {
+    socket?.emit("message:read", { roomId });
+  }, []);
+
+  const initiateCall = useCallback(
+    (roomId: string, callType: "audio" | "video", targetUserId?: string) => {
+      socket?.emit("call:initiate", { roomId, callType, targetUserId });
+    },
+    [],
+  );
+
+  const acceptCall = useCallback((callId: string, roomId: string) => {
+    socket?.emit("call:accept", { callId, roomId });
+  }, []);
+
+  const declineCall = useCallback((callId: string, roomId: string) => {
+    socket?.emit("call:decline", { callId, roomId });
+  }, []);
+
+  const endCall = useCallback((callId: string, roomId: string) => {
+    socket?.emit("call:end", { callId, roomId });
+  }, []);
+
+  const sendOffer = useCallback(
+    (
+      targetUserId: string,
+      offer: RTCSessionDescriptionInit,
+      callId: string,
+    ) => {
+      socket?.emit("webrtc:offer", { targetUserId, offer, callId });
+    },
+    [],
+  );
+
+  const sendAnswer = useCallback(
+    (
+      targetUserId: string,
+      answer: RTCSessionDescriptionInit,
+      callId: string,
+    ) => {
+      socket?.emit("webrtc:answer", { targetUserId, answer, callId });
+    },
+    [],
+  );
+
+  const sendIceCandidate = useCallback(
+    (targetUserId: string, candidate: RTCIceCandidate, callId: string) => {
+      socket?.emit("webrtc:ice-candidate", { targetUserId, candidate, callId });
+    },
+    [],
+  );
+
+  const onCallIncoming = useCallback((cb: (data: any) => void) => {
+    socket?.on("call:incoming", cb);
+    return () => socket?.off("call:incoming", cb);
+  }, []);
+
+  const onCallAccepted = useCallback((cb: (data: any) => void) => {
+    socket?.on("call:accepted", cb);
+    return () => socket?.off("call:accepted", cb);
+  }, []);
+
+  const onCallDeclined = useCallback((cb: (data: any) => void) => {
+    socket?.on("call:declined", cb);
+    return () => socket?.off("call:declined", cb);
+  }, []);
+
+  const onCallEnded = useCallback((cb: (data: any) => void) => {
+    socket?.on("call:ended", cb);
+    return () => socket?.off("call:ended", cb);
+  }, []);
+
+  const onWebRTCOffer = useCallback((cb: (data: any) => void) => {
+    socket?.on("webrtc:offer", cb);
+    return () => socket?.off("webrtc:offer", cb);
+  }, []);
+
+  const onWebRTCAnswer = useCallback((cb: (data: any) => void) => {
+    socket?.on("webrtc:answer", cb);
+    return () => socket?.off("webrtc:answer", cb);
+  }, []);
+
+  const onWebRTCIceCandidate = useCallback((cb: (data: any) => void) => {
+    socket?.on("webrtc:ice-candidate", cb);
+    return () => socket?.off("webrtc:ice-candidate", cb);
+  }, []);
+
+  return {
+    socket,
+    sendMessage,
+    editMessage,
+    startTyping,
+    stopTyping,
+    updateStatus,
+    markRead,
+    reactToMessage,
+    deleteMessage,
+    pinMessage,
+    initiateCall,
+    acceptCall,
+    declineCall,
+    endCall,
+    sendOffer,
+    sendAnswer,
+    sendIceCandidate,
+    onCallIncoming,
+    onCallAccepted,
+    onCallDeclined,
+    onCallEnded,
+    onWebRTCOffer,
+    onWebRTCAnswer,
+    onWebRTCIceCandidate,
+  };
+}

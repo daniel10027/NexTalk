@@ -1,0 +1,25 @@
+{
+  "name": "NexTalk",
+  "short_name": "NexTalk",
+  "description": "Real-time chat with voice, video, and communities",
+  "start_url": "/chat",
+  "display": "standalone",
+  "background_color": "#090e1a",
+  "theme_color": "#6366f1",
+  "orientation": "portrait-primary",
+  "categories": ["communication", "social"],
+  "shortcuts": [
+    {
+      "name": "Open Chat",
+      "short_name": "Chat",
+      "description": "Go to your messages",
+      "url": "/chat"
+    },
+    {
+      "name": "Friends",
+      "short_name": "Friends",
+      "description": "View your friends",
+      "url": "/friends"
+    }
+  ]
+}
