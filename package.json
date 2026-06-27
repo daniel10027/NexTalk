@@ -13,6 +13,7 @@
     "@uploadthing/react": "^6.8.0",
     "axios": "^1.18.1",
     "bcryptjs": "^2.4.3",
+    "cloudinary": "^2.10.0",
     "clsx": "^2.1.1",
     "crypto": "^1.0.1",
     "date-fns": "^3.6.0",
@@ -36,7 +37,7 @@
     "socket.io-client": "^4.8.3",
     "tailwind-merge": "^2.6.1",
     "typescript": "^5.5.3",
-    "uploadthing": "^6.13.3",
+    "uploadthing": "^7.7.4",
     "zod": "^3.25.76",
     "zustand": "^4.5.7"
   },

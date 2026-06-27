@@ -487,3 +487,24 @@ MIT License free to use for educational and personal projects.
 ---
 
 _Built as a Final Year Project demonstrating full-stack development with real-time communication, authentication, security, and modern UI/UX design._
+
+## Screenshots
+
+|                                                   |                                                          |
+| ------------------------------------------------- | -------------------------------------------------------- |
+| ![Home](./Results/home.png)                       | ![Login](./Results/login_create_account.png)             |
+| **Landing Page**                                  | **Login & Register**                                     |
+| ![Private Chat](./Results/private_discussion.png) | ![Group Channel](./Results/group_channel_discussion.png) |
+| **Private Messages**                              | **Group & Channel Chat**                                 |
+| ![Incoming Call](./Results/incomming_call.png)    | ![Call Started](./Results/call_stared.png)               |
+| **Incoming Call**                                 | **Active Call**                                          |
+| ![Call History](./Results/call_history.png)       | ![Friend Profile](./Results/friend_profil.png)           |
+| **Call History**                                  | **Friend Profile**                                       |
+| ![Forgot Password](./Results/foget_password.png)  | ![Admin Dashboard](./Results/admin_dash.png)             |
+| **Password Reset**                                | **Admin Dashboard**                                      |
+| ![User List](./Results/user_list.png)             |                                                          |
+| **User Management**                               |                                                          |
+
+```
+
+```

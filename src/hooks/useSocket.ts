@@ -23,13 +23,10 @@ export function useSocket() {
 
   useEffect(() => {
     if (!session?.user?.id) return;
-    // Si déjà connecté avec le même user, ne pas reconnecter
     if (socket?.connected && socketUserId === session.user.id) return;
     if (initialized.current) return;
     initialized.current = true;
     socketUserId = session.user.id;
-
-    console.log("🔄 Connecting socket for user:", session.user.id);
 
     socket = io(window.location.origin, {
       auth: { userId: session.user.id },
@@ -49,7 +46,7 @@ export function useSocket() {
     });
 
     socket.on("connect_error", (err) => {
-      console.error("❌ Socket connect_error:", err.message, err);
+      console.error("❌ Socket connect_error:", err.message);
     });
 
     socket.on("disconnect", (reason) => {
@@ -57,7 +54,6 @@ export function useSocket() {
     });
 
     socket.on("message:new", (message: any) => {
-      console.log("📨 New message via socket:", message._id);
       addMessage(message.room?._id || message.room, message);
     });
 
@@ -69,12 +65,12 @@ export function useSocket() {
       storeDeleteMessage(roomId, messageId);
     });
 
-    socket.on("message:reaction", ({ messageId, reactions }: any) => {
-      console.log("👍 Reaction update:", messageId);
-    });
-
-    socket.on("typing:start", ({ userId, roomId }: any) => {
-      setTypingUser(roomId, userId);
+    socket.on("typing:start", ({ userId, roomId, displayName }: any) => {
+      setTypingUser(roomId, {
+        _id: userId,
+        displayName: displayName || "Someone",
+        username: "",
+      });
     });
 
     socket.on("typing:stop", ({ userId, roomId }: any) => {
@@ -85,7 +81,6 @@ export function useSocket() {
       setUserStatus(userId, status);
     });
 
-    // Logs appels
     socket.on("call:incoming", (data: any) => {
       console.log("📞 Incoming call:", data);
     });
@@ -102,15 +97,15 @@ export function useSocket() {
       console.log("📞 Call declined:", data);
     });
 
-    socket.on("webrtc:offer", (data: any) => {
+    socket.on("webrtc:offer", () => {
       console.log("🔗 WebRTC offer received");
     });
 
-    socket.on("webrtc:answer", (data: any) => {
+    socket.on("webrtc:answer", () => {
       console.log("🔗 WebRTC answer received");
     });
 
-    socket.on("webrtc:ice-candidate", (data: any) => {
+    socket.on("webrtc:ice-candidate", () => {
       console.log("🧊 ICE candidate received");
     });
 
@@ -121,8 +116,6 @@ export function useSocket() {
       socket = null;
     };
   }, [session?.user?.id]);
-
-  // ─── Méthodes ────────────────────────────────────────────────
 
   const sendMessage = useCallback(
     (
@@ -174,18 +167,14 @@ export function useSocket() {
     socket?.emit("message:read", { roomId });
   }, []);
 
-  // ─── Appels ──────────────────────────────────────────────────
-
   const initiateCall = useCallback(
     (roomId: string, callType: "audio" | "video", targetUserId?: string) => {
-      console.log("📞 Emitting call:initiate to", targetUserId);
       socket?.emit("call:initiate", { roomId, callType, targetUserId });
     },
     [],
   );
 
   const acceptCall = useCallback((callId: string, roomId: string) => {
-    console.log("📞 Emitting call:accept", callId);
     socket?.emit("call:accept", { callId, roomId });
   }, []);
 
@@ -203,7 +192,6 @@ export function useSocket() {
       offer: RTCSessionDescriptionInit,
       callId: string,
     ) => {
-      console.log("🔗 Sending WebRTC offer to", targetUserId);
       socket?.emit("webrtc:offer", { targetUserId, offer, callId });
     },
     [],
@@ -215,7 +203,6 @@ export function useSocket() {
       answer: RTCSessionDescriptionInit,
       callId: string,
     ) => {
-      console.log("🔗 Sending WebRTC answer to", targetUserId);
       socket?.emit("webrtc:answer", { targetUserId, answer, callId });
     },
     [],
@@ -227,8 +214,6 @@ export function useSocket() {
     },
     [],
   );
-
-  // ─── Listeners (retournent une fonction de cleanup) ──────────
 
   const onCallIncoming = useCallback((cb: (data: any) => void) => {
     socket?.on("call:incoming", cb);
