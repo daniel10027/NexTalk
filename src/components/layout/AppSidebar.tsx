@@ -15,6 +15,8 @@ import {
   Search,
   Shield,
   PhoneCall,
+  Menu,
+  X,
 } from "lucide-react";
 import { cn, getInitials, generateAvatarColor } from "@/lib/utils";
 import { useChatStore } from "@/store/chatStore";
@@ -34,23 +36,28 @@ export default function AppSidebar() {
   const { data: session } = useSession();
   const { rooms } = useChatStore();
   const [showStatus, setShowStatus] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const user = session?.user;
 
-  return (
+  const sidebarContent = (
     <aside
-      className="w-64 flex flex-col border-r"
+      className="w-64 flex flex-col h-full border-r"
       style={{
-        background: "rgba(9,14,26,0.8)",
+        background: "rgba(9,14,26,0.98)",
         borderColor: "rgba(255,255,255,0.06)",
       }}
     >
       {/* Logo */}
       <div
-        className="px-4 py-4 border-b"
+        className="px-4 py-4 border-b flex items-center justify-between"
         style={{ borderColor: "rgba(255,255,255,0.06)" }}
       >
-        <Link href="/chat" className="flex items-center gap-2.5">
+        <Link
+          href="/chat"
+          className="flex items-center gap-2.5"
+          onClick={() => setMobileOpen(false)}
+        >
           <div
             className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
             style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}
@@ -61,12 +68,19 @@ export default function AppSidebar() {
             Nex<span className="gradient-text">Talk</span>
           </span>
         </Link>
+        {/* Bouton fermer sur mobile */}
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="lg:hidden p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5"
+        >
+          <X className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Search */}
       <div className="px-3 py-3">
         <div
-          className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm cursor-pointer transition-colors border"
+          className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm cursor-pointer border"
           style={{
             background: "rgba(255,255,255,0.04)",
             borderColor: "rgba(255,255,255,0.06)",
@@ -75,21 +89,16 @@ export default function AppSidebar() {
         >
           <Search className="w-4 h-4" />
           <span>Rechercher...</span>
-          <kbd
-            className="ml-auto text-xs px-1.5 py-0.5 rounded"
-            style={{ background: "rgba(255,255,255,0.08)", color: "#6b7280" }}
-          >
-            ⌘K
-          </kbd>
         </div>
       </div>
 
-      {/* Navigation principale */}
+      {/* Navigation */}
       <nav className="px-3 space-y-0.5">
         {NAV_ITEMS.map(({ href, icon: Icon, label }) => (
           <Link
             key={href}
             href={href}
+            onClick={() => setMobileOpen(false)}
             className={cn(
               "sidebar-item",
               pathname === href || pathname.startsWith(href + "/")
@@ -102,10 +111,10 @@ export default function AppSidebar() {
           </Link>
         ))}
 
-        {/* Lien Admin — uniquement pour les admins */}
         {user?.role === "admin" && (
           <Link
             href="/admin"
+            onClick={() => setMobileOpen(false)}
             className={cn(
               "sidebar-item",
               pathname === "/admin" ? "active" : "",
@@ -138,6 +147,7 @@ export default function AppSidebar() {
           </span>
           <Link
             href="/chat"
+            onClick={() => setMobileOpen(false)}
             className="hover:text-white transition-colors"
             style={{ color: "#4b5563" }}
           >
@@ -157,11 +167,11 @@ export default function AppSidebar() {
           {rooms.slice(0, 15).map((room) => {
             const isActive = pathname.includes(room._id);
             const hasUnread = (room.unreadCount || 0) > 0;
-
             return (
               <Link
                 key={room._id}
                 href={`/chat/${room._id}`}
+                onClick={() => setMobileOpen(false)}
                 className={cn("sidebar-item", isActive ? "active" : "")}
               >
                 <div className="w-8 h-8 rounded-xl overflow-hidden flex-shrink-0">
@@ -220,7 +230,7 @@ export default function AppSidebar() {
         </div>
       </div>
 
-      {/* Profil utilisateur */}
+      {/* Profil */}
       <div
         className="border-t p-3"
         style={{ borderColor: "rgba(255,255,255,0.06)" }}
@@ -230,10 +240,9 @@ export default function AppSidebar() {
             <StatusSelector onClose={() => setShowStatus(false)} />
           </div>
         )}
-
         <div
-          className="flex items-center gap-2.5 p-2 rounded-xl transition-colors group cursor-pointer"
-          style={{}}
+          className="flex items-center gap-2.5 p-2 rounded-xl transition-colors"
+          style={{ cursor: "pointer" }}
           onMouseEnter={(e) =>
             (e.currentTarget.style.background = "rgba(255,255,255,0.05)")
           }
@@ -241,7 +250,6 @@ export default function AppSidebar() {
             (e.currentTarget.style.background = "transparent")
           }
         >
-          {/* Avatar cliquable pour le statut */}
           <div onClick={() => setShowStatus(!showStatus)}>
             <UserAvatar
               user={{
@@ -254,7 +262,6 @@ export default function AppSidebar() {
               showStatus
             />
           </div>
-
           <div className="flex-1 min-w-0">
             <div
               className="text-sm font-medium truncate"
@@ -266,8 +273,6 @@ export default function AppSidebar() {
               @{user?.username}
             </div>
           </div>
-
-          {/* Actions — toujours visibles */}
           <div className="flex items-center gap-1">
             <Link
               href="/settings"
@@ -289,5 +294,39 @@ export default function AppSidebar() {
         </div>
       </div>
     </aside>
+  );
+
+  return (
+    <>
+      {/* Bouton hamburger — visible uniquement sur mobile */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="lg:hidden fixed top-3 left-3 z-40 p-2 rounded-xl text-white"
+        style={{
+          background: "rgba(99,102,241,0.9)",
+          backdropFilter: "blur(8px)",
+        }}
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+
+      {/* Overlay mobile */}
+      {mobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar desktop — toujours visible */}
+      <div className="hidden lg:flex h-full">{sidebarContent}</div>
+
+      {/* Sidebar mobile — slide depuis la gauche */}
+      <div
+        className={`lg:hidden fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
+      >
+        {sidebarContent}
+      </div>
+    </>
   );
 }
