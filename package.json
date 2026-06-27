@@ -5,9 +5,8 @@
   "scripts": {
     "dev": "ts-node --project tsconfig.server.json -r tsconfig-paths/register -r dotenv/config server.ts dotenv_config_path=.env.local",
     "build": "next build",
-    "start": "NODE_ENV=production ts-node --project tsconfig.server.json -r tsconfig-paths/register -r dotenv/config server.ts dotenv_config_path=.env.local",
-    "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "start": "ts-node --project tsconfig.server.json -r tsconfig-paths/register server.ts",
+    "lint": "next lint"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
