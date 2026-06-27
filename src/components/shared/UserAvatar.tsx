@@ -1,13 +1,28 @@
 "use client";
 
-import Image from "next/image";
-import { cn, getInitials, generateAvatarColor, STATUS_COLORS } from "@/lib/utils";
+import {
+  cn,
+  getInitials,
+  generateAvatarColor,
+  STATUS_COLORS,
+} from "@/lib/utils";
 import { useChatStore } from "@/store/chatStore";
-import { useSession } from "next-auth/react";
+
+interface UserObject {
+  _id?: string;
+  username?: string;
+  displayName?: string;
+  name?: string;
+  avatar?: string;
+  image?: string;
+  status?: string;
+}
 
 interface UserAvatarProps {
+  // Accepte soit un objet user, soit src+name séparément
+  user?: UserObject;
   src?: string | null;
-  name: string;
+  name?: string;
   userId?: string;
   size?: "xs" | "sm" | "md" | "lg" | "xl";
   showStatus?: boolean;
@@ -32,6 +47,7 @@ const DOT_SIZE: Record<string, string> = {
 };
 
 export default function UserAvatar({
+  user,
   src,
   name,
   userId,
@@ -41,29 +57,50 @@ export default function UserAvatar({
   className,
 }: UserAvatarProps) {
   const { onlineUsers } = useChatStore();
-  const resolvedStatus = status || (userId ? onlineUsers[userId] : undefined) || "offline";
+
+  // Résoudre les valeurs depuis user ou props directes
+  const resolvedSrc = src || user?.avatar || user?.image || null;
+  const resolvedName =
+    name || user?.displayName || user?.name || user?.username || "?";
+  const resolvedUserId = userId || user?._id || "";
+  const resolvedStatus =
+    status ||
+    user?.status ||
+    (resolvedUserId ? onlineUsers[resolvedUserId] : undefined) ||
+    "offline";
+
+  const initials = getInitials(resolvedName);
+  const bgColor = generateAvatarColor(resolvedName + resolvedUserId);
 
   return (
     <div className={cn("relative flex-shrink-0", SIZE_MAP[size], className)}>
-      {src ? (
-        <div className={cn("rounded-full overflow-hidden w-full h-full")}>
-          <Image src={src} alt={name} fill className="object-cover" sizes="64px" />
-        </div>
+      {resolvedSrc ? (
+        <img
+          src={resolvedSrc}
+          alt={resolvedName}
+          className="rounded-full w-full h-full object-cover"
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = "none";
+          }}
+        />
       ) : (
         <div
-          className={cn("rounded-full w-full h-full flex items-center justify-center font-semibold text-white")}
-          style={{ background: generateAvatarColor(name + (userId || "")) }}
+          className="rounded-full w-full h-full flex items-center justify-center font-semibold text-white"
+          style={{ background: bgColor }}
         >
-          {getInitials(name)}
+          {initials}
         </div>
       )}
       {showStatus && resolvedStatus !== "invisible" && (
         <div
           className={cn(
             DOT_SIZE[size],
-            "rounded-full absolute bottom-0 right-0 border-2 border-surface-900"
+            "rounded-full absolute bottom-0 right-0 border-2",
           )}
-          style={{ background: STATUS_COLORS[resolvedStatus] || STATUS_COLORS.offline }}
+          style={{
+            background: STATUS_COLORS[resolvedStatus] || STATUS_COLORS.offline,
+            borderColor: "#090e1a",
+          }}
         />
       )}
     </div>
