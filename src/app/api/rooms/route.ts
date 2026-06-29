@@ -2,7 +2,7 @@
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import connectDB from "@/lib/db/mongoose";
-import { Room, User, Notification } from "@/models";
+import { Room, Notification } from "@/models";
 import { authOptions } from "@/lib/auth/options";
 import {
   apiResponse,
@@ -11,7 +11,6 @@ import {
   slugify,
 } from "@/lib/utils";
 
-// GET: User's rooms
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -24,7 +23,6 @@ export async function GET(req: NextRequest) {
 
     await connectDB();
 
-    // Discover public channels
     if (isPublic === "true") {
       const query: any = {
         isPublic: true,
@@ -43,7 +41,6 @@ export async function GET(req: NextRequest) {
       return apiResponse({ rooms });
     }
 
-    // User's rooms
     const query: any = { "members.user": session.user.id };
     if (type) query.type = type;
 
@@ -52,6 +49,13 @@ export async function GET(req: NextRequest) {
       .populate("owner", "username displayName avatar")
       .sort({ updatedAt: -1 });
 
+    // Filtrer les membres dont le user a été supprimé (populate retourne null)
+    rooms.forEach((room: any) => {
+      if (room.members) {
+        room.members = room.members.filter((m: any) => m.user && m.user._id);
+      }
+    });
+
     return apiResponse({ rooms });
   } catch (err) {
     console.error("GET /api/rooms error:", err);
@@ -59,7 +63,6 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: Create room
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -101,7 +104,6 @@ export async function POST(req: NextRequest) {
       tags,
     });
 
-    // Notifier les membres ajoutés
     for (const memberId of members) {
       if (memberId !== session.user.id) {
         await Notification.create({

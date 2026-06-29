@@ -13,17 +13,12 @@ import {
   Globe,
   MoreVertical,
   Bell,
-  BellOff,
   LogOut,
-  Trash2,
   Star,
-  X,
 } from "lucide-react";
 import UserAvatar from "@/components/shared/UserAvatar";
 import { useChatStore } from "@/store/chatStore";
 import { useSession } from "next-auth/react";
-import { useSocket } from "@/hooks/useSocket";
-import { formatRelativeTime } from "@/lib/utils";
 
 interface ChatHeaderProps {
   room: {
@@ -32,7 +27,6 @@ interface ChatHeaderProps {
     type: "direct" | "group" | "channel";
     description?: string;
     avatar?: string;
-    banner?: string;
     isPublic?: boolean;
     members: Array<{
       user: {
@@ -54,49 +48,56 @@ export default function ChatHeader({ room, onInitiateCall }: ChatHeaderProps) {
   const { showMemberList, setShowMemberList, setShowSearch, showSearch } =
     useChatStore();
   const [showDropdown, setShowDropdown] = useState(false);
-  const { updateStatus } = useSocket();
 
-  const toggleMemberList = () => {
-    setShowMemberList(!showMemberList);
-  };
+  // Filtrer les membres null
+  const validMembers = room.members.filter((m) => m.user && m.user._id);
 
-  const onlineCount = room.members.filter(
+  const onlineCount = validMembers.filter(
     (m) => m.user.status === "online" || m.user.status === "away",
   ).length;
 
   const isDirect = room.type === "direct";
   const otherUser = isDirect
-    ? room.members.find((m) => m.user._id !== session?.user?.id)?.user
+    ? validMembers.find((m) => m.user._id !== session?.user?.id)?.user
     : null;
 
   const statusColor = otherUser
     ? ({
-        online: "bg-green-400",
-        away: "bg-yellow-400",
-        busy: "bg-red-400",
-        offline: "bg-gray-500",
-        invisible: "bg-gray-500",
-      }[otherUser.status] ?? "bg-gray-500")
+        online: "#22c55e",
+        away: "#f59e0b",
+        busy: "#ef4444",
+        offline: "#6b7280",
+        invisible: "#6b7280",
+      }[otherUser.status] ?? "#6b7280")
     : "";
 
   return (
-    <div className="h-16 border-b border-white/5 flex items-center px-4 gap-3 bg-surface-800/50 backdrop-blur-sm flex-shrink-0">
-      {/* Avatar / Icon */}
+    <div
+      className="h-16 border-b flex items-center px-4 gap-3 flex-shrink-0"
+      style={{
+        borderColor: "rgba(255,255,255,0.05)",
+        background: "rgba(255,255,255,0.02)",
+      }}
+    >
+      {/* Avatar */}
       <div className="relative flex-shrink-0">
         {isDirect && otherUser ? (
           <UserAvatar user={otherUser} size="md" showStatus />
         ) : (
-          <div className="w-10 h-10 rounded-xl bg-brand-600/20 flex items-center justify-center">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center"
+            style={{ background: "rgba(99,102,241,0.2)" }}
+          >
             {room.type === "channel" ? (
-              <Hash className="w-5 h-5 text-brand-400" />
+              <Hash className="w-5 h-5" style={{ color: "#818cf8" }} />
             ) : (
-              <Users className="w-5 h-5 text-brand-400" />
+              <Users className="w-5 h-5" style={{ color: "#818cf8" }} />
             )}
           </div>
         )}
       </div>
 
-      {/* Room Info */}
+      {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <h2 className="font-semibold text-white truncate">
@@ -109,15 +110,21 @@ export default function ChatHeader({ room, onInitiateCall }: ChatHeaderProps) {
               <Lock className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
             ))}
           {room.settings?.readOnly && (
-            <span className="text-xs bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">
+            <span
+              className="text-xs px-1.5 py-0.5 rounded"
+              style={{ background: "rgba(234,179,8,0.2)", color: "#facc15" }}
+            >
               Read-only
             </span>
           )}
         </div>
         <p className="text-xs text-gray-400 truncate">
           {isDirect && otherUser ? (
-            <span className={`inline-flex items-center gap-1`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${statusColor}`} />
+            <span className="inline-flex items-center gap-1">
+              <span
+                className="w-1.5 h-1.5 rounded-full inline-block"
+                style={{ background: statusColor }}
+              />
               {otherUser.status === "offline" ||
               otherUser.status === "invisible"
                 ? "Offline"
@@ -125,14 +132,13 @@ export default function ChatHeader({ room, onInitiateCall }: ChatHeaderProps) {
             </span>
           ) : (
             room.description ||
-            `${room.members.length} members · ${onlineCount} online`
+            `${validMembers.length} members · ${onlineCount} online`
           )}
         </p>
       </div>
 
       {/* Actions */}
       <div className="flex items-center gap-1 flex-shrink-0">
-        {/* Call buttons for DMs */}
         {isDirect && (
           <>
             <button
@@ -152,27 +158,34 @@ export default function ChatHeader({ room, onInitiateCall }: ChatHeaderProps) {
           </>
         )}
 
-        {/* Search */}
         <button
           onClick={() => setShowSearch(!showSearch)}
-          className={`p-2 rounded-lg transition-colors ${showSearch ? "bg-brand-600/20 text-brand-400" : "hover:bg-white/5 text-gray-400 hover:text-white"}`}
-          title="Search messages"
+          className="p-2 rounded-lg transition-colors"
+          style={{
+            background: showSearch ? "rgba(99,102,241,0.2)" : "transparent",
+            color: showSearch ? "#818cf8" : "#9ca3af",
+          }}
+          title="Search"
         >
           <Search className="w-5 h-5" />
         </button>
 
-        {/* Members toggle (groups/channels) */}
         {!isDirect && (
           <button
-            onClick={toggleMemberList}
-            className={`p-2 rounded-lg transition-colors ${showMemberList ? "bg-brand-600/20 text-brand-400" : "hover:bg-white/5 text-gray-400 hover:text-white"}`}
+            onClick={() => setShowMemberList(!showMemberList)}
+            className="p-2 rounded-lg transition-colors"
+            style={{
+              background: showMemberList
+                ? "rgba(99,102,241,0.2)"
+                : "transparent",
+              color: showMemberList ? "#818cf8" : "#9ca3af",
+            }}
             title="Members"
           >
             <Users className="w-5 h-5" />
           </button>
         )}
 
-        {/* More */}
         <div className="relative">
           <button
             onClick={() => setShowDropdown(!showDropdown)}
@@ -186,7 +199,13 @@ export default function ChatHeader({ room, onInitiateCall }: ChatHeaderProps) {
                 className="fixed inset-0 z-10"
                 onClick={() => setShowDropdown(false)}
               />
-              <div className="absolute right-0 top-10 z-20 w-48 bg-surface-700 border border-white/10 rounded-xl shadow-xl py-1 overflow-hidden">
+              <div
+                className="absolute right-0 top-10 z-20 w-48 rounded-xl shadow-xl py-1 overflow-hidden"
+                style={{
+                  background: "#1e2538",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                }}
+              >
                 <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors">
                   <Pin className="w-4 h-4" /> Pinned Messages
                 </button>
@@ -194,7 +213,7 @@ export default function ChatHeader({ room, onInitiateCall }: ChatHeaderProps) {
                   <Bell className="w-4 h-4" /> Notifications
                 </button>
                 <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors">
-                  <Star className="w-4 h-4" /> Mark as Favorite
+                  <Star className="w-4 h-4" /> Favorite
                 </button>
                 {!isDirect && (
                   <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors">
