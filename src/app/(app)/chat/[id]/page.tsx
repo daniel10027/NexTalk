@@ -15,14 +15,20 @@ export default async function ChatRoomPage({
 
   await connectDB();
 
-  const room = await Room.findOne({
+  const room = (await Room.findOne({
     _id: params.id,
     "members.user": session.user.id,
   })
     .populate("members.user", "username displayName avatar status")
-    .lean();
+    .populate("owner", "username displayName avatar")
+    .lean()) as any;
 
   if (!room) notFound();
+
+  // Filtrer les membres dont le user a été supprimé (populate retourne null)
+  if (room.members) {
+    room.members = room.members.filter((m: any) => m.user && m.user._id);
+  }
 
   return <ChatRoom room={JSON.parse(JSON.stringify(room))} />;
 }
