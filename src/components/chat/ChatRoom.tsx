@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import ChatHeader from "./ChatHeader";
 import MessageList from "./MessageList";
@@ -45,7 +45,7 @@ interface Room {
       avatar?: string;
       status: string;
       role?: string;
-    };
+    } | null;
     role: string;
     nickname?: string;
   }>;
@@ -62,16 +62,8 @@ interface IncomingCall {
   caller: { _id: string; displayName: string; avatar?: string };
 }
 
-export default function ChatRoom({
-  room,
-  currentUserId,
-}: {
-  room: Room;
-  currentUserId?: string;
-}) {
+export default function ChatRoom({ room }: { room: Room }) {
   const { data: session } = useSession();
-  const userId = currentUserId || session?.user?.id;
-
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
@@ -88,12 +80,28 @@ export default function ChatRoom({
   const { socket, startTyping, stopTyping, acceptCall, declineCall } =
     useSocket();
 
+  // Filtrer les membres dont user est null (utilisateurs supprimés)
+  const validMembers = room.members.filter(
+    (m) => m.user && m.user._id,
+  ) as Array<{
+    user: {
+      _id: string;
+      username: string;
+      displayName: string;
+      avatar?: string;
+      status: string;
+      role?: string;
+    };
+    role: string;
+    nickname?: string;
+  }>;
+
   const otherUser =
     room.type === "direct"
-      ? room.members.find((m) => m.user._id !== userId)?.user
+      ? validMembers.find((m) => m.user._id !== session?.user?.id)?.user
       : undefined;
 
-  // Écouter les événements socket directement
+  // Écouter les événements socket
   useEffect(() => {
     if (!socket) return;
 
@@ -126,7 +134,6 @@ export default function ChatRoom({
     };
 
     const handleIncomingCall = (data: IncomingCall) => {
-      console.log("📞 ChatRoom received incoming call:", data);
       setIncomingCall(data);
     };
 
@@ -229,19 +236,20 @@ export default function ChatRoom({
     } catch {}
   };
 
-  const currentMember = room.members.find((m) => m.user._id === userId);
+  const currentMember = validMembers.find(
+    (m) => m.user._id === session?.user?.id,
+  );
   const currentRole = currentMember?.role || "member";
   const isReadOnly = room.settings?.readOnly && currentRole === "member";
   const pinnedMessages = messages.filter((m) => m.isPinned);
-
   const roomTypingUsers = (typingUsers[room._id] || [])
-    .filter((u) => u._id !== userId)
-    .map((u) => u.displayName || u.username);
+    .filter((u: any) => u._id !== session?.user?.id)
+    .map((u: any) => u.displayName || u.username || "Someone");
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <ChatHeader
-        room={room}
+        room={{ ...room, members: validMembers }}
         onInitiateCall={(type) =>
           setActiveCall({ type, targetUser: otherUser })
         }
@@ -282,7 +290,7 @@ export default function ChatRoom({
           />
         </div>
         {showMemberList && room.type !== "direct" && (
-          <MemberList members={room.members} currentUserRole={currentRole} />
+          <MemberList members={validMembers} currentUserRole={currentRole} />
         )}
       </div>
 
